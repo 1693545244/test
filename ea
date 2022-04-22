@@ -1,0 +1,20 @@
+1、获取个人仓库
+git clone https://codehub-dg-g.huawei.com/个人工号/GameEngine.git
+2、创建主仓的跟踪分支
+git remote add fantasy https://codehub-dg-g.huawei.com/HMS-CORE-Fantasy/GameEngine.git 
+git fetch fantasy  
+git checkout -b fantasy_development fantasy/development   创建一个跟踪分支
+3、基于主仓分支，创建开发分支
+git checkout -b fantasy_development_dev
+4、修改源码
+你的提交记录全部合入 fantasy_development_dev
+git commit -s
+做验证
+5、提交MR前
+git checkout fantasy_development
+git pull
+git rebase fantasy_development fantasy_development_dev
+6、做验证
+7、提交开发分支至个人仓库
+git push origin fantasy_development_dev:fantasy_development_dev 
+8、创建MR

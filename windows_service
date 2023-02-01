@@ -333,3 +333,180 @@ void LogEvent(LPCTSTR pFormat, ...)
         DeregisterEventSource(hEventSource);
     }
 }
+
+
+
+
+
+
+
+
+#define _CRT_SECURE_NO_WARNINGS
+#include <windows.h>
+#include <stdio.h>
+#include <string.h>
+#include <tchar.h>
+#include <fstream>
+#include <ctime>
+
+
+#define SERVICE_NAME TEXT("myservice")
+
+SERVICE_STATUS          g_ServiceStatus = { 0 };
+SERVICE_STATUS_HANDLE   g_StatusHandle = NULL;
+HANDLE                  g_ServiceStopEvent = INVALID_HANDLE_VALUE;
+
+void WINAPI ServiceMain(int argc, char** argv);
+void WINAPI ServiceHandler(DWORD CtrlCode);
+DWORD WINAPI ServiceWorkerThread(LPVOID lpParam);
+
+
+
+DWORD WINAPI ServiceWorkerThread(LPVOID lpParam)
+{
+
+    std::ofstream ofs;
+    int i = 0;
+    time_t curtime;
+    time(&curtime);
+    ofs.open("D:/SourceCode/test.txt", std::ios::app|std::ios::out);
+    while (WaitForSingleObject(g_ServiceStopEvent, 0) != WAIT_OBJECT_0)
+    {
+        // do-your-jobs-here
+
+        Sleep(3000);
+        time(&curtime);
+        
+
+        
+        ofs << ctime(&curtime) << "\n" << std::endl;
+
+        i++;
+    }
+
+    ofs.close();
+    return NULL;
+}
+
+void WINAPI ServiceHandler(DWORD CtrlCode)
+{
+
+
+    switch (CtrlCode)
+    {
+    case SERVICE_CONTROL_STOP:
+    case SERVICE_CONTROL_SHUTDOWN:
+        g_ServiceStatus.dwControlsAccepted = 0;
+        g_ServiceStatus.dwCurrentState = SERVICE_STOP_PENDING;
+        g_ServiceStatus.dwWin32ExitCode = 0;
+        g_ServiceStatus.dwCheckPoint = 4;
+        if (SetServiceStatus(g_StatusHandle, &g_ServiceStatus) == FALSE)
+        {
+            return;
+        }
+
+        // This will signal the worker thread to start shutting down
+        SetEvent(g_ServiceStopEvent);
+
+        break;
+    default:
+        break;
+    }
+
+
+}
+
+
+void WINAPI ServiceMain(int argc, char** argv)
+{
+
+
+    g_StatusHandle = RegisterServiceCtrlHandler((SERVICE_NAME), ServiceHandler);
+    if (g_StatusHandle == NULL)
+    {
+
+        return;
+    }
+
+    ZeroMemory(&g_ServiceStatus, sizeof(g_ServiceStatus));
+    g_ServiceStatus.dwServiceType = SERVICE_WIN32;
+    g_ServiceStatus.dwControlsAccepted = 0;
+    g_ServiceStatus.dwCurrentState = SERVICE_START_PENDING;
+    g_ServiceStatus.dwWin32ExitCode = 0;
+    g_ServiceStatus.dwServiceSpecificExitCode = 0;
+    g_ServiceStatus.dwCheckPoint = 0;
+    g_ServiceStatus.dwWaitHint = 0;
+    if (SetServiceStatus(g_StatusHandle, &g_ServiceStatus) == FALSE)
+    {
+
+        return;
+    }
+
+    // Create stop event to wait on later.
+    g_ServiceStopEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+    if (g_ServiceStopEvent == NULL)
+    {
+
+
+        g_ServiceStatus.dwControlsAccepted = 0;
+        g_ServiceStatus.dwCurrentState = SERVICE_STOPPED;
+        g_ServiceStatus.dwWin32ExitCode = GetLastError();
+        g_ServiceStatus.dwCheckPoint = 1;
+        SetServiceStatus(g_StatusHandle, &g_ServiceStatus);
+        return;
+    }
+
+    g_ServiceStatus.dwControlsAccepted = SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN | SERVICE_ACCEPT_PAUSE_CONTINUE;
+    g_ServiceStatus.dwCurrentState = SERVICE_RUNNING;
+    g_ServiceStatus.dwWin32ExitCode = 0;
+    g_ServiceStatus.dwCheckPoint = 0;
+    g_ServiceStatus.dwWaitHint = 9000;
+    if (SetServiceStatus(g_StatusHandle, &g_ServiceStatus) == FALSE)
+    {
+
+        return;
+    }
+
+    // Start the thread that will perform the main task of the service
+    HANDLE hThread = CreateThread(NULL, NULL, ServiceWorkerThread, NULL, NULL, NULL);
+    if (hThread == NULL)
+    {
+
+    }
+    // Wait until our worker thread exits effectively signaling that the service needs to stop
+    WaitForSingleObject(hThread, INFINITE);
+
+    // clean up
+    CloseHandle(g_ServiceStopEvent);
+
+    g_ServiceStatus.dwControlsAccepted = 0;
+    g_ServiceStatus.dwCurrentState = SERVICE_STOPPED;
+    g_ServiceStatus.dwWin32ExitCode = 0;
+    g_ServiceStatus.dwCheckPoint = 3;
+    if (SetServiceStatus(g_StatusHandle, &g_ServiceStatus) == FALSE)
+    {
+
+        return;
+    }
+
+    return;
+}
+
+int main(int argc, const char* argv[])
+{
+
+
+    SERVICE_TABLE_ENTRY ServiceTable[] =
+    {
+        {(LPWSTR)SERVICE_NAME, (LPSERVICE_MAIN_FUNCTION)ServiceMain},
+        {NULL, NULL}
+    };
+
+    if (StartServiceCtrlDispatcher(ServiceTable) == FALSE)
+    {
+
+        return 1;
+    }
+
+    return 0;
+}

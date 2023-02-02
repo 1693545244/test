@@ -1,0 +1,143 @@
+class TestTimerExample
+{
+public:
+    void onTimer(Poco::Timer& t)//
+    {
+        Poco::AutoPtr<Poco::EventLogChannel> log(new Poco::EventLogChannel);
+
+        log->open();
+
+        Poco::Message msg;
+        msg.setSource("1111");
+        msg.setText("333");
+        msg.setPriority(Poco::Message::PRIO_INFORMATION);
+        msg.setTime(Poco::LocalDateTime().timestamp());
+
+        log->log(msg);
+        log->close();
+    }
+};
+
+
+
+
+#include "Poco/Timestamp.h"
+#include "Poco/DateTimeFormatter.h"
+#include "Poco/DateTimeFormat.h"
+#include "Poco/Exception.h"
+#include "Poco/ThreadPool.h"
+#include "Poco/Util/ServerApplication.h"
+#include "Poco/Util/Option.h"
+#include "Poco/Util/OptionSet.h"
+#include "Poco/Util/HelpFormatter.h"
+#include "Poco/EventLogChannel.h"
+#include "Poco/LocalDateTime.h"
+#include <Poco/Timer.h>
+#include <Poco/Thread.h>
+#include <chrono>
+#include"Timer.h"
+
+using Poco::ThreadPool;
+using Poco::Util::ServerApplication;
+using Poco::Util::Application;
+using Poco::Util::Option;
+using Poco::Util::OptionSet;
+using Poco::Util::HelpFormatter;
+
+
+class WinService : public Poco::Util::ServerApplication{
+
+public:
+	WinService() : _helpRequested(false)
+	{
+	}
+
+	~WinService()
+	{
+	}
+
+protected:
+	void initialize(Application& self)
+	{
+		loadConfiguration(); // load default configuration files, if present
+		ServerApplication::initialize(self);
+	}
+
+	void uninitialize()
+	{
+		ServerApplication::uninitialize();
+	}
+
+	void defineOptions(OptionSet& options)
+	{
+		ServerApplication::defineOptions(options);
+
+		options.addOption(
+			Option("help", "h", "display help information on command line arguments")
+			.required(false)
+			.repeatable(false));
+	}
+
+	void handleOption(const std::string& name, const std::string& value)
+	{
+		ServerApplication::handleOption(name, value);
+
+		if (name == "help")
+			_helpRequested = true;
+	}
+
+	void displayHelp()
+	{
+		HelpFormatter helpFormatter(options());
+		helpFormatter.setCommand(commandName());
+		helpFormatter.setUsage("OPTIONS");
+		helpFormatter.setHeader("A web server that serves the current date and time.");
+		helpFormatter.format(std::cout);
+	}
+
+	int main(const std::vector<std::string>& args)
+	{
+		if (_helpRequested)
+		{
+			displayHelp();
+		}
+		else
+		{
+			long test_time = 10000;//10s
+			long startInterval = 1000;//1000ms后开始
+			long periodicInterval = 5000;//时间间隔500ms
+
+
+			TestTimerExample te;
+			Poco::Timer timer(startInterval, periodicInterval);
+			timer.start(Poco::TimerCallback<TestTimerExample>(te, &TestTimerExample::onTimer));
+			
+			waitForTerminationRequest();
+			
+			Poco::AutoPtr<Poco::EventLogChannel> log(new Poco::EventLogChannel);
+
+			log->open();
+
+			Poco::Message msg;
+			msg.setSource("1111");
+			msg.setText("The service has shutdow");
+			msg.setPriority(Poco::Message::PRIO_INFORMATION);
+			msg.setTime(Poco::LocalDateTime().timestamp());
+
+			log->log(msg);
+			log->close();
+
+		}
+		return Application::EXIT_OK;
+	}
+
+private:
+	bool _helpRequested;
+};
+
+
+int main(int argc, char** argv)
+{
+	WinService app;
+	return app.run(argc, argv);
+}
